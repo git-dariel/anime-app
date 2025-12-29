@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/gdrive_anime.dart';
-import '../services/anime_gdrive.service.dart';
-import '../services/anime_youtube.service.dart';
+import '../models/anime.dart';
+import '../services/anime_cloudinary.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
 
@@ -18,7 +17,7 @@ class CategoryViewScreen extends StatefulWidget {
 }
 
 class _CategoryViewScreenState extends State<CategoryViewScreen> {
-  List<GDriveAnime> _animes = [];
+  List<Anime> _animes = [];
   bool _loading = true;
 
   @override
@@ -31,34 +30,28 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
     setState(() => _loading = true);
 
     try {
-      List<Map<String, dynamic>> data;
-      
-      // Check if it's a Google Drive anime
-      if (AnimeGDriveService.animeFolders.containsKey(widget.category)) {
-        data = await AnimeGDriveService.getAnimeByCategory(widget.category);
-      }
-      // Check if it's a YouTube anime
-      else if (AnimeGDriveService.youtubeAnime.containsKey(widget.category)) {
-        final searchQuery = AnimeGDriveService.youtubeAnime[widget.category];
-        if (searchQuery != null) {
-          data = await AnimeYouTubeService.searchAnime(searchQuery);
-          // Convert to GDriveAnime format with source='youtube'
-          data = data.map((json) {
-            return {
-              ...json,
-              'fileId': json['videoId'],
-              'animeName': widget.category,
-              'source': 'youtube',
-            };
-          }).toList();
-        } else {
-          data = [];
-        }
+      // Convert category name to folder prefix (e.g. "Samurai Champloo" -> "samurai-champloo")
+      String prefix = widget.category.trim().toLowerCase().replaceAll(' ', '-');
+
+      // Fetch videos from Cloudinary with this prefix
+      final data = await AnimeCloudinaryService.fetchVideos(prefix: prefix);
+
+      // If no data found with refined prefix, try fetching all and filtering (backup)
+      List<Anime> animes = [];
+      if (data.isEmpty) {
+        final allData = await AnimeCloudinaryService.fetchVideos();
+        animes = allData
+            .map((json) => Anime.fromJson(json))
+            .where((anime) =>
+                anime.animeName.toLowerCase() == widget.category.toLowerCase())
+            .toList();
       } else {
-        data = await AnimeGDriveService.getAnimeByCategory(widget.category);
+        animes = data.map((json) => Anime.fromJson(json)).toList();
       }
-      
-      final animes = data.map((json) => GDriveAnime.fromJson(json)).toList();
+
+      // Sort by episode
+      animes.sort(
+          (a, b) => (a.episodeNumber ?? 0).compareTo(b.episodeNumber ?? 0));
 
       setState(() {
         _animes = animes;
@@ -122,7 +115,7 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
     );
   }
 
-  Widget _buildAnimeCard(GDriveAnime anime) {
+  Widget _buildAnimeCard(Anime anime) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -172,7 +165,7 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeGDriveService.formatFileSize(anime.fileSize),
+                      AnimeCloudinaryService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,

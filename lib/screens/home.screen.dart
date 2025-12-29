@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import '../models/gdrive_anime.dart';
-import '../services/anime_gdrive.service.dart';
-import '../services/anime_youtube.service.dart';
+import '../models/anime.dart';
+import '../services/anime_cloudinary.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
 import 'search.screen.dart';
 import 'category_view.screen.dart';
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -16,16 +14,13 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<GDriveAnime> _featuredAnime = [];
-  Map<String, List<GDriveAnime>> _categoryAnime = {};
+  List<Anime> _featuredAnime = [];
+  Map<String, List<Anime>> _categoryAnime = {};
   bool _loading = true;
 
-  // Get available anime from both services
+  // Get available anime from loaded data
   List<String> get categories {
-    final allCategories = <String>[];
-    allCategories.addAll(AnimeGDriveService.youtubeAnime.keys); // YouTube first
-    allCategories.addAll(AnimeGDriveService.animeFolders.keys); // Google Drive second
-    return allCategories;
+    return _categoryAnime.keys.toList()..sort();
   }
 
   @override
@@ -38,39 +33,31 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loading = true);
 
     try {
-      // Load featured anime from Google Drive
-      final featuredData = await AnimeGDriveService.getFeaturedAnime();
-      final featured =
-          featuredData.map((json) => GDriveAnime.fromJson(json)).toList();
+      // Fetch ALL videos from Cloudinary
+      final allVideosData = await AnimeCloudinaryService.fetchVideos();
+      final allVideos =
+          allVideosData.map((json) => Anime.fromJson(json)).toList();
 
-      // Load anime by each available anime series
-      Map<String, List<GDriveAnime>> categoryData = {};
-      
-      // Load Google Drive anime
-      for (String animeName in AnimeGDriveService.animeFolders.keys) {
-        final folderId = AnimeGDriveService.animeFolders[animeName];
-        if (folderId != null) {
-          final data = await AnimeGDriveService.getAnimeByFolder(folderId, animeName);
-          categoryData[animeName] =
-              data.map((json) => GDriveAnime.fromJson(json)).toList();
+      // Group by Anime Name (folder)
+      Map<String, List<Anime>> categoryData = {};
+      for (var anime in allVideos) {
+        if (!categoryData.containsKey(anime.animeName)) {
+          categoryData[anime.animeName] = [];
         }
+        categoryData[anime.animeName]!.add(anime);
       }
-      
-      // Load YouTube anime
-      for (String animeName in AnimeGDriveService.youtubeAnime.keys) {
-        final searchQuery = AnimeGDriveService.youtubeAnime[animeName];
-        if (searchQuery != null) {
-          final data = await AnimeYouTubeService.searchAnime(searchQuery);
-          // Convert YouTube data to GDriveAnime format with source='youtube'
-          categoryData[animeName] = data.map((json) {
-            return GDriveAnime.fromJson({
-              ...json,
-              'fileId': json['videoId'],
-              'animeName': animeName,
-              'source': 'youtube',
-            });
-          }).toList();
-        }
+
+      // Sort episodes within each category
+      for (var key in categoryData.keys) {
+        categoryData[key]!.sort(
+            (a, b) => (a.episodeNumber ?? 0).compareTo(b.episodeNumber ?? 0));
+      }
+
+      // Feature the first few videos or pick from specific anime
+      List<Anime> featured = [];
+      if (allVideos.isNotEmpty) {
+        // Just take the first 10 videos as featured
+        featured = allVideos.take(10).toList();
       }
 
       setState(() {
@@ -173,7 +160,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeaturedCard(GDriveAnime anime) {
+  Widget _buildFeaturedCard(Anime anime) {
     return GestureDetector(
       onTap: () => _navigateToDetail(anime),
       child: Container(
@@ -244,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeGDriveService.formatFileSize(anime.fileSize),
+                      AnimeCloudinaryService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -293,7 +280,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategorySection(String category, List<GDriveAnime> animes) {
+  Widget _buildCategorySection(String category, List<Anime> animes) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -344,7 +331,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategoryCard(GDriveAnime anime) {
+  Widget _buildCategoryCard(Anime anime) {
     return GestureDetector(
       onTap: () => _navigateToDetail(anime),
       child: Container(
@@ -392,7 +379,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeGDriveService.formatFileSize(anime.fileSize),
+                      AnimeCloudinaryService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -430,7 +417,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _navigateToDetail(GDriveAnime anime) {
+  void _navigateToDetail(Anime anime) {
     Navigator.push(
       context,
       MaterialPageRoute(

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/gdrive_anime.dart';
-import '../services/anime_youtube.service.dart';
-import '../services/anime_gdrive.service.dart';
+import '../models/anime.dart';
+import '../services/anime_cloudinary.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
 
@@ -14,8 +13,8 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<GDriveAnime> _results = [];
-  List<GDriveAnime> _recommended = [];
+  List<Anime> _results = [];
+  List<Anime> _recommended = [];
   bool _loading = false;
   bool _searched = false;
   bool _loadingRecommended = true;
@@ -30,18 +29,13 @@ class _SearchScreenState extends State<SearchScreen> {
     setState(() => _loadingRecommended = true);
 
     try {
-      // Load trending anime as recommendations
-      final data = await AnimeYouTubeService.searchAnime('trending anime');
-      
-      // Convert YouTube results to GDriveAnime format with source='youtube'
-      final recommended = data.map((json) {
-        return GDriveAnime.fromJson({
-          ...json,
-          'fileId': json['videoId'],
-          'animeName': json['title'] ?? 'Unknown',
-          'source': 'youtube',
-        });
-      }).toList();
+      // Fetch all videos from Cloudinary
+      final allData = await AnimeCloudinaryService.fetchVideos();
+      final allAnimes = allData.map((json) => Anime.fromJson(json)).toList();
+
+      // Pick random or first few as recommended
+      allAnimes.shuffle();
+      final recommended = allAnimes.take(10).toList();
 
       setState(() {
         _recommended = recommended;
@@ -65,17 +59,15 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
-      // Use YouTube search
-      final data = await AnimeYouTubeService.searchAnime(_searchController.text);
-      
-      // Convert YouTube results to GDriveAnime format with source='youtube'
-      final results = data.map((json) {
-        return GDriveAnime.fromJson({
-          ...json,
-          'fileId': json['videoId'],
-          'animeName': json['title'] ?? 'Unknown',
-          'source': 'youtube',
-        });
+      // Fetch all videos from Cloudinary
+      final allData = await AnimeCloudinaryService.fetchVideos();
+      final allAnimes = allData.map((json) => Anime.fromJson(json)).toList();
+
+      // Filter by query (case-insensitive)
+      final query = _searchController.text.trim().toLowerCase();
+      final results = allAnimes.where((anime) {
+        return anime.title.toLowerCase().contains(query) ||
+            anime.animeName.toLowerCase().contains(query);
       }).toList();
 
       setState(() {
@@ -106,7 +98,8 @@ class _SearchScreenState extends State<SearchScreen> {
               controller: _searchController,
               decoration: InputDecoration(
                 hintText: 'Search for anime...',
-                prefixIcon: const Icon(Icons.search, color: AppTheme.primaryOrange),
+                prefixIcon:
+                    const Icon(Icons.search, color: AppTheme.primaryOrange),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.clear),
@@ -201,7 +194,8 @@ class _SearchScreenState extends State<SearchScreen> {
                   )
                 : GridView.builder(
                     padding: const EdgeInsets.all(16),
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
                       crossAxisCount: 2,
                       childAspectRatio: 1,
                       crossAxisSpacing: 12,
@@ -277,8 +271,8 @@ class _SearchScreenState extends State<SearchScreen> {
                                         const SizedBox(width: 4),
                                         Expanded(
                                           child: Text(
-                                            AnimeGDriveService.formatFileSize(
-                                                anime.fileSize),
+                                            AnimeCloudinaryService
+                                                .formatFileSize(anime.fileSize),
                                             style: const TextStyle(
                                               fontSize: 10,
                                               color: AppTheme.textSecondary,
@@ -350,7 +344,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildResultCard(GDriveAnime anime) {
+  Widget _buildResultCard(Anime anime) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -400,7 +394,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeGDriveService.formatFileSize(anime.fileSize),
+                      AnimeCloudinaryService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -411,7 +405,7 @@ class _SearchScreenState extends State<SearchScreen> {
                 ),
               ],
             ),
-            
+
             // Info
             Expanded(
               child: Padding(
@@ -467,4 +461,3 @@ class _SearchScreenState extends State<SearchScreen> {
     super.dispose();
   }
 }
-

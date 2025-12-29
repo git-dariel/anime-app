@@ -1,6 +1,6 @@
 # 🎌 KAGE TV
 
-A beautiful Flutter application for watching anime content from both Google Drive and YouTube, featuring a modern UI and seamless video playback.
+A beautiful Flutter application for streaming anime content directly from Cloudinary, featuring in-app video playback with a modern UI and seamless experience.
 
 ![Flutter](https://img.shields.io/badge/Flutter-3.3.4+-blue.svg)
 ![Dart](https://img.shields.io/badge/Dart-3.0+-blue.svg)
@@ -8,27 +8,28 @@ A beautiful Flutter application for watching anime content from both Google Driv
 
 ## ✨ Features
 
-- 🎬 **Dual Source Integration** - Watch anime from both Google Drive and YouTube
-- 🔍 **Smart Search** - Search trending and popular anime on YouTube
-- 📺 **External App Playback** - Opens videos in Google Drive or YouTube app for the best experience
+- 🎬 **Cloudinary Integration** - Stream anime videos directly from Cloudinary CDN
+- 📺 **In-App Video Player** - Watch videos directly within the app with custom controls
+- 🔍 **Smart Search** - Search through your entire anime collection
 - 🎨 **Beautiful UI** - Modern dark theme with orange accents
 - 🚀 **Animated Splash Screen** - Eye-catching logo animation on app launch
 - 📱 **Cross-platform** - Works on Android and iOS
-- 🎯 **Curated Content** - Handpicked anime collections including Ghost Fighter, Hunter x Hunter, and more
+- 🎯 **Curated Content** - Organized anime collections with episodes
 - 📊 **Episode Management** - Browse all episodes with sorting and metadata
+- ⚡ **Fast Loading** - Optimized video delivery through Cloudinary CDN
+- 🎮 **Intuitive Controls** - Play/pause, seek, and progress tracking
 
-## 📚 Available Anime
+## 📚 Why Cloudinary?
 
-### YouTube Collection (Tagalog Dub)
+Cloudinary provides the best video streaming experience:
 
-- 👻 **Ghost Fighter** - Classic Filipino dubbed anime
-- 🎯 **Hunter x Hunter** - Action-packed adventure series
-- ⚓ **One Piece** - Epic pirate adventure
-- ⚔️ **Black Clover** - Magic and adventure series
-
-### Google Drive Collection
-
-- 🥋 **Samurai Champloo** - Stylish samurai anime
+- ✓ **No Playback Restrictions** - Play videos directly in the app
+- ✓ **Automatic Quality Optimization** - Adaptive bitrate streaming
+- ✓ **Fast CDN Delivery** - Lightning-fast video loading
+- ✓ **Format Auto-Detection** - Serves the best format for each device
+- ✓ **Video Transformations** - On-the-fly video processing
+- ✓ **Reliable Infrastructure** - 99.9% uptime guarantee
+- ✓ **Thumbnail Generation** - Automatic thumbnail creation
 
 ## 📱 Screenshots
 
@@ -40,8 +41,7 @@ _Coming soon_
 
 - Flutter SDK (>=3.3.4)
 - Dart SDK
-- Google Drive API key (for Google Drive content)
-- YouTube Data API v3 key (for YouTube content)
+- Cloudinary Account (free tier available)
 
 ### Installation
 
@@ -58,10 +58,16 @@ cd anime_app
 flutter pub get
 ```
 
-3. **Set up API keys:**
+3. **Set up Cloudinary:**
 
-   - **Google Drive API:** Replace `_apiKey` in `lib/services/anime_gdrive.service.dart`
-   - **YouTube API:** Replace `_apiKey` in `lib/services/anime_youtube.service.dart`
+   - Create a free account at [Cloudinary](https://cloudinary.com/)
+   - Upload your anime videos to Cloudinary
+   - Organize videos in folders (e.g., `samurai-champloo/`, `one-piece/`)
+   - Update credentials in `lib/services/anime_cloudinary.service.dart`:
+     - `_cloudName`: Your cloud name
+     - `_apiKey`: Your API key
+     - `_apiSecret`: Your API secret
+   - Update credentials in `lib/main.dart` (Cloudinary initialization)
 
 4. **Run the app:**
 
@@ -75,20 +81,20 @@ flutter run
 
 ```
 lib/
-├── main.dart                          # App entry point with splash screen
+├── main.dart                          # App entry point with Cloudinary setup
 ├── models/                            # Data models
-│   ├── gdrive_anime.dart             # Unified anime model for both sources
-│   └── youtube_anime.dart            # YouTube-specific model (legacy)
+│   └── anime.dart                     # Unified anime model
 ├── screens/                           # UI screens
 │   ├── splash.screen.dart            # Animated splash screen
 │   ├── home.screen.dart              # Main screen with categories
 │   ├── anime_detail.screen.dart      # Anime details & episodes
 │   ├── category_view.screen.dart     # Category/series episode list
-│   ├── search.screen.dart            # Search with recommendations
-│   └── video.player.screen.dart      # External app launcher
+│   ├── search.screen.dart            # Search functionality
+│   └── video.player.screen.dart      # Video player screen
 ├── services/                          # API services
-│   ├── anime_gdrive.service.dart     # Google Drive API integration
-│   └── anime_youtube.service.dart    # YouTube API integration
+│   └── anime_cloudinary.service.dart # Cloudinary API integration
+├── widgets/                           # Custom widgets
+│   └── cloudinary_video_player.dart  # Video player widget
 ├── theme/                             # App theming
 │   └── app_theme.dart                # Dark theme configuration
 └── assets/
@@ -98,85 +104,109 @@ lib/
 
 ### Data Flow
 
-1. **Home Screen** → Loads from Google Drive + YouTube
-2. **Category View** → Shows all episodes from selected source
-3. **Search** → YouTube search with recommendations
-4. **Video Playback** → Opens in external app (YouTube/Google Drive)
+1. **Home Screen** → Loads all videos from Cloudinary, groups by anime name
+2. **Category View** → Shows all episodes from selected anime series
+3. **Search** → Client-side search through all videos
+4. **Video Playback** → Streams directly from Cloudinary CDN in the app
 
 ## 🎯 Key Components
 
-### Splash Screen
+### Cloudinary Service
 
-- Animated logo with fade-in and scale effects
-- App branding with "Dar Anime" title
-- Auto-navigation to home screen after 2.5 seconds
+- Fetches videos using Cloudinary Admin API
+- Generates optimized video URLs with transformations
+- Provides automatic thumbnail generation
+- Parses episode numbers from filenames
+- Utility functions for formatting file sizes and dates
+
+### Video Player
+
+- Built on `video_player` package
+- Custom controls (play/pause, seek, progress)
+- Error handling and loading states
+- Fullscreen support
+- Responsive aspect ratio
 
 ### Home Screen
 
-- Dynamic categories from both Google Drive and YouTube
+- Dynamic categories from Cloudinary folders
 - Featured anime section
 - Quick access to search
 - Categorized anime collections
+- Pull-to-refresh functionality
 
 ### Anime Detail Screen
 
 - Comprehensive anime information
-- Episode list with sorting
+- Episode list with thumbnails
+- Tabbed interface (Episodes & Details)
 - Play button for immediate viewing
 - Related episodes from same series
 
 ### Search Screen
 
-- YouTube-powered search
-- Recommended trending anime when idle
+- Search across all anime titles and episode names
+- Recommended anime when idle
 - Grid view of search results
 - Direct playback from search results
 
-### Video Player Screen
-
-- Opens videos in external apps (YouTube/Google Drive)
-- Fallback to web browser if apps not installed
-- Toast notifications for user feedback
-- Supports both video sources seamlessly
-
 ## 🔧 Configuration
 
-### Adding New Anime
+### Organizing Videos in Cloudinary
 
-#### Google Drive Anime
+Upload your videos with this folder structure:
 
-Add to `lib/services/anime_gdrive.service.dart`:
-
-```dart
-static const Map<String, String> animeFolders = {
-  'Anime Name': 'Google Drive Folder ID',
-};
+```
+cloudinary-root/
+├── samurai-champloo/
+│   ├── Samurai_Champloo_Episode_01.mp4
+│   ├── Samurai_Champloo_Episode_02.mp4
+│   └── ...
+├── one-piece/
+│   ├── One_Piece_Episode_01.mp4
+│   ├── One_Piece_Episode_02.mp4
+│   └── ...
+└── hunter-x-hunter/
+    ├── Hunter_x_Hunter_Episode_01.mp4
+    └── ...
 ```
 
-#### YouTube Anime
+**Naming Convention:**
+- Use underscores or hyphens in filenames
+- Include "Episode" or "Ep" followed by the number
+- Example: `Anime_Name_Episode_01.mp4`
 
-Add to `lib/services/anime_gdrive.service.dart`:
+### Episode Number Parsing
 
+The app automatically extracts episode numbers from filenames using these patterns:
+- `Episode_01`, `Episode_1`
+- `Ep_01`, `Ep_1`
+- `E01`, `E1`
+- Numbers at the end of filename
+
+### Cloudinary API Setup
+
+1. **Get API Credentials:**
+   - Visit [Cloudinary Console](https://console.cloudinary.com/)
+   - Navigate to Dashboard
+   - Copy Cloud Name, API Key, and API Secret
+
+2. **Update Configuration:**
+
+In `lib/services/anime_cloudinary.service.dart`:
 ```dart
-static const Map<String, String> youtubeAnime = {
-  'Anime Name': 'Search query for YouTube',
-};
+static const String _cloudName = 'your-cloud-name';
+static const String _apiKey = 'your-api-key';
+static const String _apiSecret = 'your-api-secret';
 ```
 
-### API Keys Setup
-
-1. **Google Drive API:**
-
-   - Visit [Google Cloud Console](https://console.cloud.google.com/)
-   - Create a project and enable Drive API v3
-   - Create an API key
-   - Update in `anime_gdrive.service.dart`
-
-2. **YouTube Data API v3:**
-   - Same Google Cloud project
-   - Enable YouTube Data API v3
-   - Use the same or different API key
-   - Update in `anime_youtube.service.dart`
+In `lib/main.dart`:
+```dart
+CloudinaryContext.cloudinary = Cloudinary.fromCloudName(
+  cloudName: 'your-cloud-name',
+  apiKey: 'your-api-key',
+);
+```
 
 ## 🎨 Theme & Design
 
@@ -189,60 +219,67 @@ static const Map<String, String> youtubeAnime = {
 
 ## 📊 Features in Detail
 
-### Multi-Source Integration
+### Cloudinary Video Delivery
 
-- Seamlessly combines Google Drive and YouTube content
-- Single unified interface for both sources
-- Automatic source detection for playback
-- Consistent UI across all sources
+- **Adaptive Streaming** - Automatically adjusts quality based on network
+- **Format Optimization** - Serves optimal format (MP4, WebM, etc.)
+- **Lazy Loading** - Videos load only when needed
+- **Thumbnail Caching** - Fast thumbnail loading
+- **CDN Distribution** - Global content delivery network
 
 ### Smart Episode Parsing
 
 - Extracts episode numbers from filenames
-- Supports multiple naming conventions (E1, EP1, Episode 1)
+- Supports multiple naming conventions
 - Automatic sorting by episode number
 - Handles special cases and edge cases
 
-### External Playback
+### In-App Playback
 
-- Opens videos in native apps for better performance
-- Supports deep linking to YouTube and Google Drive apps
-- Fallback to web browser if apps unavailable
-- Better battery life and streaming quality
+- Native video player with custom controls
+- Play/pause functionality
+- Seek bar for navigation
+- Video progress indicator
+- Automatic orientation handling
+- Background audio support
 
 ## 🛡️ Legal & Ethics
 
 ### ✅ What we do (Legal):
 
-- Use official APIs (Google Drive, YouTube)
-- Link to publicly available content
-- Respect terms of service
-- No content hosting or downloading
+- Use official Cloudinary API
+- Stream from authorized Cloudinary account
+- Respect Cloudinary terms of service
+- No content piracy or unauthorized distribution
 
 ### 📝 Disclaimers:
 
-- Content is sourced from Google Drive and YouTube
-- Users are responsible for their viewing choices
-- App doesn't host any copyrighted content
+- Users are responsible for content they upload to Cloudinary
+- Ensure you have rights to stream the content
+- App is a demonstration of Cloudinary video streaming
 - All content belongs to respective copyright holders
 
 ## 🐛 Known Issues
 
-- Google Drive large folder structures may load slowly
-- API quota limits may affect heavy usage
-- Video availability depends on geographical restrictions
-- YouTube search results depend on video availability
+- Large video libraries may take time to load initially
+- Video quality depends on original upload quality
+- Cloudinary free tier has bandwidth limits
+- Very large files may require upgraded Cloudinary plan
 
 ## 🔮 Future Enhancements
 
 - [ ] Download for offline viewing
 - [ ] User favorites and watchlists
-- [ ] Push notifications for new episodes
 - [ ] Continue watching feature
+- [ ] Watch history tracking
 - [ ] Multiple language support
 - [ ] Advanced search filters
 - [ ] Chromecast integration
 - [ ] Custom playlists
+- [ ] Quality selector in player
+- [ ] Subtitle support
+- [ ] Multiple video sources
+- [ ] User authentication
 
 ## 🤝 Contributing
 
@@ -258,17 +295,32 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- [Google Drive API](https://developers.google.com/drive) - Cloud storage integration
-- [YouTube Data API](https://developers.google.com/youtube/v3) - Video content
+- [Cloudinary](https://cloudinary.com/) - Video hosting and delivery
 - [Flutter](https://flutter.dev/) - UI framework
+- [Video Player](https://pub.dev/packages/video_player) - Video playback
 - All anime studios and content creators
 
 ## 📞 Support
 
 - Create an [Issue](../../issues) for bugs
 - Check [Discussions](../../discussions) for questions
-- Read API setup guides for configuration help
+- Read Cloudinary documentation for API help
+
+## 🔑 Environment Variables (Optional)
+
+For better security, consider using environment variables:
+
+```dart
+// Create .env file (add to .gitignore)
+CLOUDINARY_CLOUD_NAME=your-cloud-name
+CLOUDINARY_API_KEY=your-api-key
+CLOUDINARY_API_SECRET=your-api-secret
+```
+
+Use a package like `flutter_dotenv` to load these values.
 
 ---
 
-Made with ❤️ by Dariel using Flutter
+Made with ❤️ by Dariel using Flutter & Cloudinary
+
+**Migrated from Google Drive to Cloudinary for better streaming experience! 🎉**

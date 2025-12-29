@@ -5,7 +5,7 @@ import 'theme/app_theme.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   // Set system UI overlay style for dark theme
   SystemChrome.setSystemUIOverlayStyle(
     const SystemUiOverlayStyle(
@@ -15,6 +15,9 @@ void main() {
       systemNavigationBarIconBrightness: Brightness.light,
     ),
   );
+
+  // Note: Cloudinary configuration is handled directly in the service
+  // Update credentials in lib/services/anime_cloudinary.service.dart
 
   runApp(const MyApp());
 }
