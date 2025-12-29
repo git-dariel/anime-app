@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import '../models/youtube_anime.dart';
+import '../models/gdrive_anime.dart';
+import '../services/anime_gdrive.service.dart';
 import '../services/anime_youtube.service.dart';
 import '../theme/app_theme.dart';
 import 'video.player.screen.dart';
 
 class AnimeDetailScreen extends StatefulWidget {
-  final YouTubeAnime anime;
+  final GDriveAnime anime;
 
   const AnimeDetailScreen({super.key, required this.anime});
 
@@ -16,7 +17,7 @@ class AnimeDetailScreen extends StatefulWidget {
 class _AnimeDetailScreenState extends State<AnimeDetailScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  List<YouTubeAnime> _episodes = [];
+  List<GDriveAnime> _episodes = [];
   bool _loadingEpisodes = false;
 
   @override
@@ -36,10 +37,27 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
     setState(() => _loadingEpisodes = true);
 
     try {
-      final episodesData =
-          await AnimeYouTubeService.getAnimeEpisodes(widget.anime.animeName);
-      final episodes =
-          episodesData.map((json) => YouTubeAnime.fromJson(json)).toList();
+      List<Map<String, dynamic>> episodesData;
+      
+      // Check source and load accordingly
+      if (widget.anime.source == 'youtube') {
+        // For YouTube, search for related videos
+        episodesData = await AnimeYouTubeService.searchAnime(widget.anime.animeName);
+        // Convert to GDriveAnime format
+        episodesData = episodesData.map((json) {
+          return {
+            ...json,
+            'fileId': json['videoId'],
+            'animeName': widget.anime.animeName,
+            'source': 'youtube',
+          };
+        }).toList();
+      } else {
+        // For Google Drive, use existing method
+        episodesData = await AnimeGDriveService.getAnimeEpisodes(widget.anime.animeName);
+      }
+      
+      final episodes = episodesData.map((json) => GDriveAnime.fromJson(json)).toList();
 
       setState(() {
         _episodes = episodes;
@@ -141,7 +159,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  widget.anime.channelTitle,
+                  widget.anime.animeName,
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
@@ -153,7 +171,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
               ),
               const SizedBox(width: 8),
               Text(
-                AnimeYouTubeService.formatPublishedDate(widget.anime.publishedAt),
+                AnimeGDriveService.formatPublishedDate(widget.anime.createdTime),
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppTheme.textSecondary,
@@ -164,21 +182,21 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
           const SizedBox(height: 12),
 
           // Stats Row
-          Row(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
             children: [
               _buildStatChip(
-                Icons.visibility,
-                '${AnimeYouTubeService.formatViewCount(widget.anime.viewCount)} views',
+                Icons.video_library,
+                widget.anime.animeName,
               ),
-              const SizedBox(width: 8),
               _buildStatChip(
-                Icons.thumb_up,
-                AnimeYouTubeService.formatViewCount(widget.anime.likeCount),
+                Icons.storage,
+                AnimeGDriveService.formatFileSize(widget.anime.fileSize),
               ),
-              const SizedBox(width: 8),
               _buildStatChip(
-                Icons.access_time,
-                AnimeYouTubeService.parseDuration(widget.anime.duration),
+                Icons.video_file,
+                'Episode ${widget.anime.episodeNumber ?? "?"}',
               ),
             ],
           ),
@@ -193,9 +211,10 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
                   context,
                   MaterialPageRoute(
                     builder: (_) => VideoPlayerScreen(
-                      episodeId: widget.anime.videoId,
+                      episodeId: widget.anime.fileId,
                       animeTitle: widget.anime.animeName,
                       episodeNumber: widget.anime.episodeNumber,
+                      source: widget.anime.source,
                     ),
                   ),
                 );
@@ -361,7 +380,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
     );
   }
 
-  Widget _buildEpisodeCard(YouTubeAnime episode, int index) {
+  Widget _buildEpisodeCard(GDriveAnime episode, int index) {
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: InkWell(
@@ -370,9 +389,10 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
             context,
             MaterialPageRoute(
               builder: (_) => VideoPlayerScreen(
-                episodeId: episode.videoId,
+                episodeId: episode.fileId,
                 animeTitle: widget.anime.animeName,
                 episodeNumber: episode.episodeNumber ?? (index + 1),
+                source: episode.source,
               ),
             ),
           );
@@ -422,7 +442,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
                         borderRadius: BorderRadius.circular(4),
                       ),
                       child: Text(
-                        AnimeYouTubeService.parseDuration(episode.duration),
+                        AnimeGDriveService.formatFileSize(episode.fileSize),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -494,7 +514,7 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
                             size: 12, color: AppTheme.textSecondary),
                         const SizedBox(width: 4),
                         Text(
-                          AnimeYouTubeService.formatViewCount(episode.viewCount),
+                          'Episode ${episode.episodeNumber ?? index + 1}',
                           style: const TextStyle(
                             fontSize: 11,
                             color: AppTheme.textSecondary,
@@ -510,8 +530,8 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            AnimeYouTubeService.formatPublishedDate(
-                                episode.publishedAt),
+                            AnimeGDriveService.formatPublishedDate(
+                                episode.createdTime),
                             style: const TextStyle(
                               fontSize: 11,
                               color: AppTheme.textSecondary,
@@ -538,18 +558,16 @@ class _AnimeDetailScreenState extends State<AnimeDetailScreen>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildDetailRow('Video ID', widget.anime.videoId),
-          _buildDetailRow('Channel', widget.anime.channelTitle),
+          _buildDetailRow('File ID', widget.anime.fileId),
+          _buildDetailRow('Anime', widget.anime.animeName),
           _buildDetailRow(
-              'Published',
-              AnimeYouTubeService.formatPublishedDate(
-                  widget.anime.publishedAt)),
-          _buildDetailRow('Duration',
-              AnimeYouTubeService.parseDuration(widget.anime.duration)),
-          _buildDetailRow('Views',
-              '${AnimeYouTubeService.formatViewCount(widget.anime.viewCount)} views'),
-          _buildDetailRow('Likes',
-              AnimeYouTubeService.formatViewCount(widget.anime.likeCount)),
+              'Created',
+              AnimeGDriveService.formatPublishedDate(
+                  widget.anime.createdTime)),
+          _buildDetailRow('File Size',
+              AnimeGDriveService.formatFileSize(widget.anime.fileSize)),
+          _buildDetailRow('Episode',
+              widget.anime.episodeNumber?.toString() ?? 'Unknown'),
           const SizedBox(height: 16),
           
           if (widget.anime.description.isNotEmpty) ...[

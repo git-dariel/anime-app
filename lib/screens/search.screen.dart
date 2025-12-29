@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import '../models/youtube_anime.dart';
+import '../models/gdrive_anime.dart';
 import '../services/anime_youtube.service.dart';
+import '../services/anime_gdrive.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
 
@@ -13,9 +14,47 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
-  List<YouTubeAnime> _results = [];
+  List<GDriveAnime> _results = [];
+  List<GDriveAnime> _recommended = [];
   bool _loading = false;
   bool _searched = false;
+  bool _loadingRecommended = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRecommended();
+  }
+
+  Future<void> _loadRecommended() async {
+    setState(() => _loadingRecommended = true);
+
+    try {
+      // Load trending anime as recommendations
+      final data = await AnimeYouTubeService.searchAnime('trending anime');
+      
+      // Convert YouTube results to GDriveAnime format with source='youtube'
+      final recommended = data.map((json) {
+        return GDriveAnime.fromJson({
+          ...json,
+          'fileId': json['videoId'],
+          'animeName': json['title'] ?? 'Unknown',
+          'source': 'youtube',
+        });
+      }).toList();
+
+      setState(() {
+        _recommended = recommended;
+        _loadingRecommended = false;
+      });
+    } catch (e) {
+      print('Error loading recommended: $e');
+      setState(() {
+        _recommended = [];
+        _loadingRecommended = false;
+      });
+    }
+  }
 
   Future<void> _search() async {
     if (_searchController.text.trim().isEmpty) return;
@@ -26,8 +65,18 @@ class _SearchScreenState extends State<SearchScreen> {
     });
 
     try {
+      // Use YouTube search
       final data = await AnimeYouTubeService.searchAnime(_searchController.text);
-      final results = data.map((json) => YouTubeAnime.fromJson(json)).toList();
+      
+      // Convert YouTube results to GDriveAnime format with source='youtube'
+      final results = data.map((json) {
+        return GDriveAnime.fromJson({
+          ...json,
+          'fileId': json['videoId'],
+          'animeName': json['title'] ?? 'Unknown',
+          'source': 'youtube',
+        });
+      }).toList();
 
       setState(() {
         _results = results;
@@ -107,25 +156,150 @@ class _SearchScreenState extends State<SearchScreen> {
     }
 
     if (!_searched) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.search,
-              size: 80,
-              color: AppTheme.textSecondary.withOpacity(0.5),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'Search for your favorite anime',
+      // Show recommended anime
+      if (_loadingRecommended) {
+        return const Center(
+          child: CircularProgressIndicator(color: AppTheme.primaryOrange),
+        );
+      }
+
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16.0),
+            child: Text(
+              'Recommended Anime',
               style: TextStyle(
-                fontSize: 16,
-                color: AppTheme.textSecondary,
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppTheme.textPrimary,
               ),
             ),
-          ],
-        ),
+          ),
+          Expanded(
+            child: _recommended.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search,
+                          size: 80,
+                          color: AppTheme.textSecondary.withOpacity(0.5),
+                        ),
+                        const SizedBox(height: 16),
+                        const Text(
+                          'No recommendations available',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : GridView.builder(
+                    padding: const EdgeInsets.all(16),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      childAspectRatio: 1,
+                      crossAxisSpacing: 12,
+                      mainAxisSpacing: 12,
+                    ),
+                    itemCount: _recommended.length,
+                    itemBuilder: (context, index) {
+                      final anime = _recommended[index];
+                      return GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AnimeDetailScreen(anime: anime),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: AppTheme.cardBackground,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Thumbnail
+                              ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(12),
+                                ),
+                                child: AspectRatio(
+                                  aspectRatio: 16 / 9,
+                                  child: Image.network(
+                                    anime.thumbnail,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => Container(
+                                      color: AppTheme.darkBackground,
+                                      child: const Icon(
+                                        Icons.movie,
+                                        size: 40,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Info
+                              Padding(
+                                padding: const EdgeInsets.all(6.0),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      anime.title,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        const Icon(
+                                          Icons.storage,
+                                          size: 10,
+                                          color: AppTheme.textSecondary,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Expanded(
+                                          child: Text(
+                                            AnimeGDriveService.formatFileSize(
+                                                anime.fileSize),
+                                            style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       );
     }
 
@@ -176,7 +350,7 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  Widget _buildResultCard(YouTubeAnime anime) {
+  Widget _buildResultCard(GDriveAnime anime) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -226,7 +400,7 @@ class _SearchScreenState extends State<SearchScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeYouTubeService.parseDuration(anime.duration),
+                      AnimeGDriveService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -266,7 +440,7 @@ class _SearchScreenState extends State<SearchScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${AnimeYouTubeService.formatViewCount(anime.viewCount)} views',
+                            anime.animeName,
                             style: const TextStyle(
                               fontSize: 10,
                               color: AppTheme.textSecondary,

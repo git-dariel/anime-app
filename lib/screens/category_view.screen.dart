@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import '../models/youtube_anime.dart';
+import '../models/gdrive_anime.dart';
+import '../services/anime_gdrive.service.dart';
 import '../services/anime_youtube.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
@@ -17,7 +18,7 @@ class CategoryViewScreen extends StatefulWidget {
 }
 
 class _CategoryViewScreenState extends State<CategoryViewScreen> {
-  List<YouTubeAnime> _animes = [];
+  List<GDriveAnime> _animes = [];
   bool _loading = true;
 
   @override
@@ -30,9 +31,34 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
     setState(() => _loading = true);
 
     try {
-      final data =
-          await AnimeYouTubeService.getAnimeByCategory(widget.category);
-      final animes = data.map((json) => YouTubeAnime.fromJson(json)).toList();
+      List<Map<String, dynamic>> data;
+      
+      // Check if it's a Google Drive anime
+      if (AnimeGDriveService.animeFolders.containsKey(widget.category)) {
+        data = await AnimeGDriveService.getAnimeByCategory(widget.category);
+      }
+      // Check if it's a YouTube anime
+      else if (AnimeGDriveService.youtubeAnime.containsKey(widget.category)) {
+        final searchQuery = AnimeGDriveService.youtubeAnime[widget.category];
+        if (searchQuery != null) {
+          data = await AnimeYouTubeService.searchAnime(searchQuery);
+          // Convert to GDriveAnime format with source='youtube'
+          data = data.map((json) {
+            return {
+              ...json,
+              'fileId': json['videoId'],
+              'animeName': widget.category,
+              'source': 'youtube',
+            };
+          }).toList();
+        } else {
+          data = [];
+        }
+      } else {
+        data = await AnimeGDriveService.getAnimeByCategory(widget.category);
+      }
+      
+      final animes = data.map((json) => GDriveAnime.fromJson(json)).toList();
 
       setState(() {
         _animes = animes;
@@ -96,7 +122,7 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
     );
   }
 
-  Widget _buildAnimeCard(YouTubeAnime anime) {
+  Widget _buildAnimeCard(GDriveAnime anime) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
@@ -146,7 +172,7 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeYouTubeService.parseDuration(anime.duration),
+                      AnimeGDriveService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -186,7 +212,7 @@ class _CategoryViewScreenState extends State<CategoryViewScreen> {
                         const SizedBox(width: 4),
                         Expanded(
                           child: Text(
-                            '${AnimeYouTubeService.formatViewCount(anime.viewCount)} views',
+                            anime.animeName,
                             style: const TextStyle(
                               fontSize: 10,
                               color: AppTheme.textSecondary,

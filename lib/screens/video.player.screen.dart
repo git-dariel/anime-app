@@ -6,12 +6,14 @@ class VideoPlayerScreen extends StatefulWidget {
   final String episodeId;
   final String animeTitle;
   final int? episodeNumber;
+  final String source; // 'gdrive' or 'youtube'
 
   const VideoPlayerScreen({
     super.key,
     required this.episodeId,
     required this.animeTitle,
     this.episodeNumber,
+    this.source = 'gdrive',
   });
 
   @override
@@ -24,31 +26,51 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
   @override
   void initState() {
     super.initState();
-    // Automatically attempt to open YouTube when screen loads
+    // Automatically attempt to open Google Drive when screen loads
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _openInYouTube();
+      _openInGoogleDrive();
     });
   }
 
-  Future<void> _openInYouTube() async {
+  Future<void> _openInGoogleDrive() async {
     if (_isOpening) return;
     
     setState(() => _isOpening = true);
     
-    // Try YouTube app first, then browser
-    final youtubeAppUrl = 'vnd.youtube://${widget.episodeId}';
-    final youtubeWebUrl = 'https://www.youtube.com/watch?v=${widget.episodeId}';
-    
     try {
-      // Try to open in YouTube app
-      final appUri = Uri.parse(youtubeAppUrl);
-      if (await canLaunchUrl(appUri)) {
-        final launched = await launchUrl(
-          appUri,
-          mode: LaunchMode.externalApplication,
-        );
+      if (widget.source == 'youtube') {
+        // YouTube URLs - using multiple formats for better compatibility
+        final youtubeAppUrl = 'youtube://watch?v=${widget.episodeId}';
+        final youtubeWebUrl = 'https://www.youtube.com/watch?v=${widget.episodeId}';
         
-        if (launched && mounted) {
+        bool launched = false;
+        
+        // Try to open in YouTube app
+        try {
+          final appUri = Uri.parse(youtubeAppUrl);
+          launched = await launchUrl(
+            appUri,
+            mode: LaunchMode.externalApplication,
+          );
+        } catch (e) {
+          print('YouTube app not available: $e');
+        }
+        
+        if (!launched) {
+          // Fallback to web URL
+          final webUri = Uri.parse(youtubeWebUrl);
+          await launchUrl(webUri, mode: LaunchMode.externalApplication);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Opening in YouTube...'),
+                duration: Duration(seconds: 2),
+                backgroundColor: AppTheme.primaryOrange,
+              ),
+            );
+          }
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text('Opening in YouTube app...'),
@@ -58,14 +80,41 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           );
         }
       } else {
-        // Fallback to browser
-        final webUri = Uri.parse(youtubeWebUrl);
-        await launchUrl(webUri, mode: LaunchMode.externalApplication);
+        // Google Drive URLs
+        final driveAppUrl = 'google-drive://file?id=${widget.episodeId}';
+        final driveWebUrl = 'https://drive.google.com/file/d/${widget.episodeId}/view';
         
-        if (mounted) {
+        bool launched = false;
+        
+        // Try to open in Google Drive app first
+        try {
+          final appUri = Uri.parse(driveAppUrl);
+          launched = await launchUrl(
+            appUri,
+            mode: LaunchMode.externalApplication,
+          );
+        } catch (e) {
+          print('Google Drive app not available: $e');
+        }
+        
+        if (!launched) {
+          // Fallback to web URL
+          final webUri = Uri.parse(driveWebUrl);
+          await launchUrl(webUri, mode: LaunchMode.externalApplication);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Opening in Google Drive...'),
+                duration: Duration(seconds: 2),
+                backgroundColor: AppTheme.primaryOrange,
+              ),
+            );
+          }
+        } else if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Opening in browser...'),
+              content: Text('Opening in Google Drive app...'),
               duration: Duration(seconds: 2),
               backgroundColor: AppTheme.primaryOrange,
             ),
@@ -73,7 +122,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
         }
       }
     } catch (e) {
-      print('Error opening YouTube: $e');
+      print('Error opening video: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -94,6 +143,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     return Scaffold(
       backgroundColor: AppTheme.darkBackground,
       appBar: AppBar(
+        backgroundColor: AppTheme.darkBackground,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -119,7 +169,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // YouTube Icon
+              // Google Drive Icon
               Container(
                 width: 140,
                 height: 140,
@@ -136,9 +186,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               const SizedBox(height: 32),
               
               // Title
-              const Text(
-                'Watch on YouTube',
-                style: TextStyle(
+              Text(
+                widget.source == 'youtube' ? 'Watch on YouTube' : 'Watch on Google Drive',
+                style: const TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
                   color: AppTheme.textPrimary,
@@ -168,7 +218,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       ),
                       textAlign: TextAlign.center,
                     ),
-                    if (widget.episodeNumber != null) ...[
+                    if (widget.episodeNumber != null) ...[ 
                       const SizedBox(height: 12),
                       Container(
                         padding: const EdgeInsets.symmetric(
@@ -188,18 +238,20 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    const Row(
+                    Row(
                       children: [
-                        Icon(
+                        const Icon(
                           Icons.info_outline,
                           color: AppTheme.textSecondary,
                           size: 20,
                         ),
-                        SizedBox(width: 8),
+                        const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Videos open in YouTube for the best viewing experience with no buffering or playback issues.',
-                            style: TextStyle(
+                            widget.source == 'youtube' 
+                                ? 'Videos open in YouTube app for the best viewing experience.'
+                                : 'Videos open in Google Drive app for the best viewing experience.',
+                            style: const TextStyle(
                               fontSize: 14,
                               color: AppTheme.textSecondary,
                               height: 1.5,
@@ -213,11 +265,11 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               ),
               const SizedBox(height: 32),
               
-              // Watch on YouTube button
+              // Watch button
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton.icon(
-                  onPressed: _isOpening ? null : _openInYouTube,
+                  onPressed: _isOpening ? null : _openInGoogleDrive,
                   icon: _isOpening
                       ? const SizedBox(
                           width: 20,
@@ -229,7 +281,9 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         )
                       : const Icon(Icons.play_arrow, size: 28),
                   label: Text(
-                    _isOpening ? 'Opening...' : 'Watch on YouTube',
+                    widget.source == 'youtube' 
+                        ? (_isOpening ? 'Opening...' : 'Watch on YouTube')
+                        : (_isOpening ? 'Opening...' : 'Watch on Google Drive'),
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -268,7 +322,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
               
               const SizedBox(height: 24),
               
-              // Why this works better
+              // Why Google Drive
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
@@ -287,7 +341,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                         ),
                         SizedBox(width: 8),
                         Text(
-                          'Why YouTube App?',
+                          'Why Google Drive?',
                           style: TextStyle(
                             color: AppTheme.primaryOrange,
                             fontWeight: FontWeight.bold,
@@ -298,45 +352,15 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
                     ),
                     SizedBox(height: 8),
                     Text(
-                      '✓ No loading or buffering issues\n'
-                      '✓ Better video quality (up to 4K)\n'
+                      '✓ Direct streaming from Google Drive\n'
+                      '✓ High quality video playback\n'
                       '✓ Full playback controls\n'
-                      '✓ Works with all videos\n'
-                      '✓ Save battery and data',
+                      '✓ Works with all your anime\n'
+                      '✓ Reliable and fast',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,
                         height: 1.6,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              
-              const SizedBox(height: 16),
-              
-              // Video ID display (for debugging)
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBackground.withOpacity(0.3),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(
-                      Icons.video_library,
-                      color: AppTheme.textSecondary,
-                      size: 16,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Video ID: ${widget.episodeId}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: AppTheme.textSecondary,
-                        fontFamily: 'monospace',
                       ),
                     ),
                   ],

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
-import '../models/youtube_anime.dart';
+import '../models/gdrive_anime.dart';
+import '../services/anime_gdrive.service.dart';
 import '../services/anime_youtube.service.dart';
 import '../theme/app_theme.dart';
 import 'anime_detail.screen.dart';
 import 'search.screen.dart';
 import 'category_view.screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,18 +16,17 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<YouTubeAnime> _featuredAnime = [];
-  Map<String, List<YouTubeAnime>> _categoryAnime = {};
+  List<GDriveAnime> _featuredAnime = [];
+  Map<String, List<GDriveAnime>> _categoryAnime = {};
   bool _loading = true;
 
-  final List<String> categories = [
-    'Action',
-    'Comedy',
-    'Romance',
-    'Fantasy',
-    'Adventure',
-    'Drama',
-  ];
+  // Get available anime from both services
+  List<String> get categories {
+    final allCategories = <String>[];
+    allCategories.addAll(AnimeGDriveService.youtubeAnime.keys); // YouTube first
+    allCategories.addAll(AnimeGDriveService.animeFolders.keys); // Google Drive second
+    return allCategories;
+  }
 
   @override
   void initState() {
@@ -37,17 +38,39 @@ class _HomeScreenState extends State<HomeScreen> {
     setState(() => _loading = true);
 
     try {
-      // Load featured anime
-      final featuredData = await AnimeYouTubeService.getFeaturedAnime();
+      // Load featured anime from Google Drive
+      final featuredData = await AnimeGDriveService.getFeaturedAnime();
       final featured =
-          featuredData.map((json) => YouTubeAnime.fromJson(json)).toList();
+          featuredData.map((json) => GDriveAnime.fromJson(json)).toList();
 
-      // Load anime by categories
-      Map<String, List<YouTubeAnime>> categoryData = {};
-      for (String category in categories) {
-        final data = await AnimeYouTubeService.getAnimeByCategory(category);
-        categoryData[category] =
-            data.map((json) => YouTubeAnime.fromJson(json)).toList();
+      // Load anime by each available anime series
+      Map<String, List<GDriveAnime>> categoryData = {};
+      
+      // Load Google Drive anime
+      for (String animeName in AnimeGDriveService.animeFolders.keys) {
+        final folderId = AnimeGDriveService.animeFolders[animeName];
+        if (folderId != null) {
+          final data = await AnimeGDriveService.getAnimeByFolder(folderId, animeName);
+          categoryData[animeName] =
+              data.map((json) => GDriveAnime.fromJson(json)).toList();
+        }
+      }
+      
+      // Load YouTube anime
+      for (String animeName in AnimeGDriveService.youtubeAnime.keys) {
+        final searchQuery = AnimeGDriveService.youtubeAnime[animeName];
+        if (searchQuery != null) {
+          final data = await AnimeYouTubeService.searchAnime(searchQuery);
+          // Convert YouTube data to GDriveAnime format with source='youtube'
+          categoryData[animeName] = data.map((json) {
+            return GDriveAnime.fromJson({
+              ...json,
+              'fileId': json['videoId'],
+              'animeName': animeName,
+              'source': 'youtube',
+            });
+          }).toList();
+        }
       }
 
       setState(() {
@@ -65,11 +88,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.tv, color: AppTheme.primaryOrange, size: 28),
-            SizedBox(width: 8),
-            Text('KageTV'),
+            Image.asset(
+              'assets/images/logo.png',
+              height: 40,
+              width: 40,
+            ),
+            const SizedBox(width: 12),
+            const Text('KAGE TV'),
           ],
         ),
         actions: [
@@ -146,7 +173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildFeaturedCard(YouTubeAnime anime) {
+  Widget _buildFeaturedCard(GDriveAnime anime) {
     return GestureDetector(
       onTap: () => _navigateToDetail(anime),
       child: Container(
@@ -217,7 +244,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeYouTubeService.parseDuration(anime.duration),
+                      AnimeGDriveService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -249,7 +276,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 const SizedBox(width: 4),
                 Expanded(
                   child: Text(
-                    '${AnimeYouTubeService.formatViewCount(anime.viewCount)} views',
+                    anime.animeName,
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppTheme.textSecondary,
@@ -266,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategorySection(String category, List<YouTubeAnime> animes) {
+  Widget _buildCategorySection(String category, List<GDriveAnime> animes) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -317,7 +344,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCategoryCard(YouTubeAnime anime) {
+  Widget _buildCategoryCard(GDriveAnime anime) {
     return GestureDetector(
       onTap: () => _navigateToDetail(anime),
       child: Container(
@@ -365,7 +392,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
-                      AnimeYouTubeService.parseDuration(anime.duration),
+                      AnimeGDriveService.formatFileSize(anime.fileSize),
                       style: const TextStyle(
                         color: Colors.white,
                         fontSize: 10,
@@ -389,9 +416,9 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
             const SizedBox(height: 4),
-            // Views
+            // Anime name
             Text(
-              '${AnimeYouTubeService.formatViewCount(anime.viewCount)} views',
+              anime.animeName,
               style: const TextStyle(
                 fontSize: 10,
                 color: AppTheme.textSecondary,
@@ -403,7 +430,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _navigateToDetail(YouTubeAnime anime) {
+  void _navigateToDetail(GDriveAnime anime) {
     Navigator.push(
       context,
       MaterialPageRoute(
